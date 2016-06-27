@@ -1,5 +1,5 @@
 # second-brexit
-Analysis on the petition for the 2nd Brexit referendum (https://petition.parliament.uk/petitions/131215).
+Analysis on the petition for the 2nd Brexit referendum (https://petition.parliament.uk/petitions/131215). You can find the compiled version of this notebook on [RPubs](http://rpubs.com/marco-basaldella/second-brexit).
 
 ## Credits
 
