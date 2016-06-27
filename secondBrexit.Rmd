@@ -1,0 +1,257 @@
+---
+title: "Second Brexit Referendum"
+author: "Marco Basaldella"
+date: "June 27, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+# install missing packages (if needed) and load them
+
+pkgTest <- function(x)
+{
+  if (!require(x,character.only = TRUE))
+  {
+    install.packages(x,dep=TRUE)
+    if(!require(x,character.only = TRUE)) stop("Package not found")
+  }
+}
+pkgTest("jsonlite")
+pkgTest("rworldmap")
+pkgTest("raster")
+pkgTest("rgeos")
+pkgTest("rgdal")
+pkgTest("ggplot2")
+pkgTest("RCurl")
+```
+
+
+After the Brexit referendum, a [petition](https://petition.parliament.uk/petitions/131215) surfaced on the Internet requesting a second referendum. Intuition may tell us that territories where *"Remain"* won may be the ones which are requesting a second petition, but is this the case?
+
+Luckily, the UK Parliament website offers all the petition data in JSON format available for download, so we can freely analyze them with RStudio.
+
+To start, we simply download the content of the petition data into a variable:
+
+```{r}
+json_data <- fromJSON("https://petition.parliament.uk/petitions/131215.json",flatten=TRUE)
+```
+
+If we analyze the output with `str(json_data)` (not shown), we can see that we have the petition data divided by country and by [parliament constiuencies](https://en.wikipedia.org/wiki/List_of_United_Kingdom_Parliament_constituencies). 
+
+First of all, we start by looking who in the world would love to keep Britain in the UK. So, we keep only the signatures country data:
+
+```{r}
+# filter the petitions by country
+sgn_by_country = json_data$data$attributes$signatures_by_country
+
+```
+
+Then, we look at the top countries who want Britain in the EU. We sort the array and display the top 20 countries using ```head```:
+
+```{r}
+sgn_by_country = sgn_by_country[order(-sgn_by_country$signature_count),]
+head(sgn_by_country,n=20)
+```
+
+Ooh, so it seems that French don't have Britons so much! The number of signatures from Gibraltar is also very interesting, considering that the population of the territory is just about [35,000](https://en.wikipedia.org/wiki/Gibraltar).
+
+So, to have a clearer picture, let's put this data on a [beautiful world map](https://github.com/AndySouth/rworldmap)!
+
+```{r, message=FALSE,warning=FALSE, fig.width=12, fig.height=8}
+sgn_by_country$log_signature_count = log10(sgn_by_country$signature_count)
+dataMap <- joinCountryData2Map(sgn_by_country,joinCode="ISO2",nameJoinColumn="code")
+mapData = mapCountryData(dataMap, nameColumnToPlot="signature_count",mapTitle="Second Brexit Referendum",catMethod=10^(0:7),addLegend = FALSE)
+do.call( addMapLegendBoxes, c(mapData,title="# signatures",x="bottomleft"))
+```
+
+Now let's see at how the petition is popular in Britain. As before, keep the constituencies only from the JSON and look at the top 20.
+
+```{r}
+signatures_by_constituency = json_data$data$attributes$signatures_by_constituency
+signatures_by_constituency = signatures_by_constituency[order(-signatures_by_constituency$signature_count),]
+
+head(signatures_by_constituency[,c(1,4)],n=20)
+```
+
+Now let's do the map. Unfortunately, Nothern Ireland will be exluded from our map, since the geometry data I found doesn't include it.
+
+First, we read the map data and match the name of the constituencies.
+
+```{r}
+# load the map
+ukMap = readOGR("https://github.com/martinjc/UK-GeoJSON/raw/master/json/electoral/gb/topo_wpc.json","wpc")
+
+# match the names in the map
+ind = match(as.character(ukMap@data$id),signatures_by_constituency$ons_code)
+ukMap@data$name = signatures_by_constituency$name[ind]
+ukMap@data$votes = signatures_by_constituency$signature_count[ind]
+```
+
+Then, we prepare the dataframe for plotting:
+
+```{r}
+# build the dataframe to print
+constituencies.map <- data.frame(id=0:(length(ukMap@data$name)-1),
+                                 Constituency=as.character(ukMap@data$name))
+plotData = fortify(ukMap)
+plotData = merge(plotData,constituencies.map,by="id")
+ind = match(plotData$Constituency,as.factor(signatures_by_constituency$name))
+plotData$votes = signatures_by_constituency$signature_count[ind]
+```
+
+And finally, the maps!
+
+```{r fig.width=8, fig.height=8}
+theme_set(theme_minimal())
+
+p = ggplot(data=plotData,
+       aes(x=long, y=lat,
+           group=group))
+
+p = p + 
+  geom_map(data = plotData,
+           map = plotData,
+           aes(map_id=id, x=long, y=lat, group=group,
+               fill=plotData$votes),
+           color="white", size=0.001) +
+  scale_fill_gradient(
+    #guide = "legend",
+    breaks = c(0,200,400,800,1600,3200,6400,12800,25600),
+    name = "# signatures",
+    low='green', high='red', trans="log")
+
+p = p +  
+  labs(x="", y="", title="Petition for second Brexit referendum")+ #labels
+  theme(axis.ticks.y = element_blank(),axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),axis.text.x = element_blank(), 
+        plot.title = element_text(lineheight=1, face="bold")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  
+  
+p
+```
+
+Hmm, nice. But it's not that useful: we should normalize petition signatures by the number of voters for each region. Thankfully, the UK's electoral commission is very helpful: we can download 2015 electoral data from the UK's [electoral commission](http://www.electoralcommission.org.uk/our-work/our-research/electoral-data) website.
+
+For convenience, I pre-processed and cleaned the data a bit before feeding them into R. Let's see which are the top 20 constituencies by *percentage* of electorate requesting a second referendum:
+
+```{r}
+electoralData = read.csv(
+  text = getURL("https://dl.dropboxusercontent.com/u/4954206/r/UkConstituencyData2015.csv"),
+  header = TRUE,
+  stringsAsFactors = FALSE)
+
+electoralData = merge(electoralData,signatures_by_constituency,by="name")
+electoralData$signaturePercent = 100* electoralData$signature_count / electoralData$electorate
+electoralData = electoralData[order(-electoralData$signaturePercent),]
+head(electoralData[,c(1,9)],20)
+
+```
+
+Let's place it again on a beautiful map to make it clearer:
+
+```{r fig.width=8, fig.height=8}
+ind = match(plotData$Constituency,as.factor(electoralData$name))
+plotData$votesPercent = electoralData$signaturePercent[ind]
+
+p = ggplot(data=plotData,
+       aes(x=long, y=lat,
+           group=group))
+
+p = p + 
+  geom_map(data = plotData,
+           map = plotData,
+           aes(map_id=id, x=long, y=lat, group=group,
+               fill=plotData$votesPercent),
+           color="white", size=0.001) +
+  scale_fill_gradient(
+    #guide = "legend",
+    breaks = c(0,5,10,15,20,25),
+    name = "% of voters\nrequesting 2nd\nreferendum",
+    low='green', high='red')
+
+p = p +  
+  labs(x="", y="", title="Petition for second Brexit referendum")+ #labels
+  theme(axis.ticks.y = element_blank(),axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),axis.text.x = element_blank(), 
+        plot.title = element_text(lineheight=1, face="bold")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  
+  
+p
+```
+
+Unfortunately, we have some grey areas, where data from different sources doesn't match.
+
+Now we aggregate per region:
+
+```{r}
+aggData = electoralData[,c(3,5,8)]
+regionalData <-aggregate(data = aggData, electorate~region,FUN=sum, na.rm=TRUE)
+regionalData$signaturePercentRegion <-aggregate(data = aggData, signature_count~region,FUN=sum, na.rm=TRUE)$signature_count
+regionalData$signaturePercentRegion = 100 * regionalData$signaturePercentRegion / regionalData$electorate
+
+regionalData = regionalData[order(-regionalData$signaturePercentRegion),]
+head(regionalData,n=20)
+```
+
+Well, it seems to be that the regions where the Leave won are the ones who now are requesting a second referendum the most. Scotland would seem to not care so much - probably, they would just [prefer indipendence](http://www.theguardian.com/politics/live/2016/jun/23/eu-referendum-result-live-counting-leave-remain-brain-in-europe).
+The same hold for Nothern Ireland (`NI` in the output), with just 5% of voters requesting the referendum.
+
+Then we plot this data on a map:
+
+```{r fig.width=8, fig.height=8}
+# pre-plot 
+electoralData = merge(electoralData,regionalData[,c(1,3)],by="region")
+ind = match(plotData$Constituency,as.factor(electoralData$name))
+plotData$votesPercentRegion = electoralData$signaturePercentRegion[ind]
+
+p = ggplot(data=plotData,
+       aes(x=long, y=lat,
+           group=group))
+
+p = p + 
+  geom_map(data = plotData,
+           map = plotData,
+           aes(map_id=id, x=long, y=lat, group=group,
+               fill=plotData$votesPercentRegion),
+           color="white", size=0.001) +
+  scale_fill_gradient(
+    #guide = "legend",
+    #breaks = c(0,5,10,15,20,25),
+    name = "% of voters\nrequesting 2nd\nreferendum",
+    low='green', high='red')
+
+p = p +  
+  labs(x="", y="", title="Petition for second Brexit referendum")+ #labels
+  theme(axis.ticks.y = element_blank(),axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),axis.text.x = element_blank(), 
+        plot.title = element_text(lineheight=1, face="bold")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  
+  
+p
+
+```
+
+
+Beautiful, eh? This gives a very clear picture on how Englishmen seem to be the ones regretting their decision the most! Anyways, I am by no means a political scientist: I just wanted to have a bit of fun with R, so I'll leave the interpretation of this picture to someone else.
+
+### Credits
+
+I took many ideas and code from [this github repo](https://github.com/kjhealy/uk-elections). Spatial data for the maps comes from [Martin Chorley's UK-GeoJSON project](https://github.com/martinjc/UK-GeoJSON), and it's licensed with a CC-BY 4.0 license. Petition data and electoral body data come from the UK's institutional websites (linked above).
+
+### Disclaimer
+
+Using electoral data to compute these maps is probably not the best choice, because the petition can be signed by anyone, not just people with voting rights.
+
+Moreover, suspicions rose that the petition has been [manipulated](http://www.theguardian.com/politics/2016/jun/26/petition-for-second-eu-referendum-may-have-been-manipulated) by citiziens signing twice, or giving away their postal code. Anyways, the data has been periodically cleaned by the authorities: for example, I own one dump file with thousand of signatures from Vatican City, which have then disappeared.
+
+### License
+
+This notebook is licensed with a [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) license. Please attribute by linking back to this file.
+
