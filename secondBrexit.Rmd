@@ -141,7 +141,7 @@ For convenience, I pre-processed and cleaned the data a bit before feeding them 
 
 ```{r}
 electoralData = read.csv(
-  text = getURL("https://dl.dropboxusercontent.com/u/4954206/r/UkConstituencyData2015.csv"),
+  text = getURL("https://raw.githubusercontent.com/basaldella/second-brexit/master/UkConstituencyData2015.csv"),
   header = TRUE,
   stringsAsFactors = FALSE)
 
@@ -251,7 +251,11 @@ Using electoral data to compute these maps is probably not the best choice, beca
 
 Moreover, suspicions rose that the petition has been [manipulated](http://www.theguardian.com/politics/2016/jun/26/petition-for-second-eu-referendum-may-have-been-manipulated) by citiziens signing twice, or giving away their postal code. Anyways, the data has been periodically cleaned by the authorities: for example, I own one dump file with thousand of signatures from Vatican City, which have then disappeared.
 
+### Data and source
+
+Source code and processed data for this experiment is available on [github](https://github.com/basaldella/second-brexit).
+
 ### License
 
-This notebook is licensed with a [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) license. Please attribute by linking back to this file.
+This notebook is licensed with a [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) license. Please attribute by linking back to this file or to the corresponding [github repo](https://github.com/basaldella/second-brexit).
 
