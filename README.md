@@ -7,4 +7,4 @@ I took many ideas and code from [this github repo](https://github.com/kjhealy/uk
 
 ## License
 
-This repository is licensed with a [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) license. Please attribute by linking back to this website.
+This repository is licensed with a [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) license. Please attribute by linking back to this website or to the [RPub page](http://rpubs.com/marco-basaldella/second-brexit).
