@@ -57,7 +57,7 @@ sgn_by_country = sgn_by_country[order(-sgn_by_country$signature_count),]
 head(sgn_by_country,n=20)
 ```
 
-Ooh, so it seems that French don't have Britons so much! The number of signatures from Gibraltar is also very interesting, considering that the population of the territory is just about [35,000](https://en.wikipedia.org/wiki/Gibraltar).
+Ooh, so it seems that French don't hate Britons so much! The number of signatures from Gibraltar is also very interesting, considering that the population of the territory is just about [35,000](https://en.wikipedia.org/wiki/Gibraltar).
 
 So, to have a clearer picture, let's put this data on a [beautiful world map](https://github.com/AndySouth/rworldmap)!
 
